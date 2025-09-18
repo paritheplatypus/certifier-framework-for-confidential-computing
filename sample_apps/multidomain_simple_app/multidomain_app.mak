@@ -28,6 +28,7 @@ endif
 # little more complicated.  To use newer protobuf libraries, define NEWPROROBUF as
 # is done below.  Comment it out for older protobuf usage.
 NEWPROTOBUF=1
+#CF_NEW_API=1
 
 CP = $(CERTIFIER_ROOT)/certifier_service/certprotos
 S= $(CERTIFIER_ROOT)/src
@@ -35,6 +36,8 @@ O= $(OBJ_DIR)
 US=.
 I= $(CERTIFIER_ROOT)/include
 INCLUDE= -I$(I) -I/usr/local/opt/openssl@1.1/include/ -I$(S)/sev-snp/
+SE = $(S)/simulated-enclave
+AE= $(S)/application-enclave
 
 # Compilation of protobuf files could run into some errors, so avoid using
 # # -Werror for those targets
@@ -46,6 +49,9 @@ CFLAGS_NOERROR=$(INCLUDE) -O3 -g -Wall -std=c++17 -Wno-unused-variable -D X64 -W
 CFLAGS1=$(INCLUDE) -O1 -g -Wall -std=c++11 -Wno-unused-variable -D X64 -Wno-deprecated-declarations
 endif
 CFLAGS = $(CFLAGS_NOERROR) -Werror
+ifdef CF_NEW_API
+CFLAGS += -DNEW_API
+endif
 
 CC=g++
 LINK=g++
@@ -115,11 +121,11 @@ $(O)/support.o: $(S)/support.cc $(I)/support.h
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
 
-$(O)/simulated_enclave.o: $(S)/simulated_enclave.cc $(I)/simulated_enclave.h
+$(O)/simulated_enclave.o: $(SE)/simulated_enclave.cc $(I)/simulated_enclave.h
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
 
-$(O)/application_enclave.o: $(S)/application_enclave.cc $(I)/application_enclave.h
+$(O)/application_enclave.o: $(AE)/application_enclave.cc $(I)/application_enclave.h
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
 

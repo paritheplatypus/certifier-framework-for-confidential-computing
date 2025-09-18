@@ -40,10 +40,16 @@ endif
 # is done below.  Comment it out for older protobuf usage.
 NEWPROTOBUF=1
 
+# Compile with new api
+NEW_API=1
+#endif
+
 CP = $(CERTIFIER_ROOT)/certifier_service/certprotos
 S= $(SRC_DIR)
 O= $(OBJ_DIR)
 I= $(INC_DIR)
+SE= $(SRC_DIR)/simulated-enclave
+AE= $(SRC_DIR)/application-enclave
 CL=..
 INCLUDE = -I$(INC_DIR) -I/usr/local/opt/openssl@1.1/include/ -I$(S)/sev-snp -I $(S)/gramine -I/usr/include
 
@@ -54,6 +60,11 @@ CFLAGS_COMMON = $(INCLUDE) -g -std=c++17 -D X64 -Wall -Wno-unused-variable -Wno-
 endif
 
 CFLAGS  = $(CFLAGS_COMMON) -O3
+
+ifndef NEW_API
+CFLAGS += -DNEW_API
+endif
+
 ifdef ENABLE_SEV
 
 CFLAGS  += -D SEV_SNP -D SEV_DUMMY_GUEST
@@ -187,9 +198,11 @@ $(O)/claims_tests.o: $(S)/claims_tests.cc $(I)/certifier.pb.h $(I)/certifier.h $
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
 
+ifdef ENABLE_SEV
 $(O)/sev_tests.o: $(S)/sev_tests.cc $(I)/certifier.pb.h $(I)/certifier.h
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
+endif
 
 $(O)/certifier_tests.o: $(S)/certifier_tests.cc $(I)/certifier.pb.h $(I)/certifier.h $(S)/test_support.cc
 	@echo "\ncompiling $<"
@@ -231,11 +244,11 @@ $(O)/support.o: $(S)/support.cc $(I)/support.h
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
 
-$(O)/simulated_enclave.o: $(S)/simulated_enclave.cc $(I)/simulated_enclave.h
+$(O)/simulated_enclave.o: $(SE)/simulated_enclave.cc $(I)/simulated_enclave.h
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
 
-$(O)/application_enclave.o: $(S)/application_enclave.cc $(I)/application_enclave.h
+$(O)/application_enclave.o: $(AE)/application_enclave.cc $(I)/application_enclave.h
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
 

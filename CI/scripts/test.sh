@@ -73,7 +73,7 @@ TestList=(
            "test-run_example-help-list-args"
            "test-run_example-dry-run"
            "test-run_example-simple_app"
-           #"test-simple_app-with-crypto_algorithms"
+           "test-simple_app-with-crypto_algorithms"
            "test-build-and-setup-App-Service-and-simple_app_under_app_service"
            "test-run_example-multidomain_simple_app"
            "test-build-and-install-sev-snp-simulator"
@@ -83,6 +83,7 @@ TestList=(
 	   "test-simple_app_under_keystone-using-shim"
 
 	   "test-acl_lib-programs"
+	   "test-cf-utility"
            
            #"test-run_example-simple_app_python"
            #"test-simple_app_python-with-warm-restart"
@@ -320,7 +321,7 @@ function unit-test-certlib-utility-programs() {
     echo " "
     # Run certlib/ Go unit-tests, which use policy_key_file.bin policy_cert_file.bin
     # from test_data/ dir.
-    cd ../certlib
+    # cd ../certlib
     go test
 
     popd > /dev/null 2>&1
@@ -851,17 +852,33 @@ function test-run_example-simple_app_under_islet-using-shim() {
 }
 
 # #############################################################################
+function test-cf-utility() {
+    echo "******************************************************************"
+    echo "* Test the cf_utility"
+    echo "******************************************************************"
+    echo " "
+
+    pushd "${CERT_ROOT}"/vm_model_tools/src > /dev/null 2>&1
+    # We need to clean here
+    make -i -f cf_utility.mak clean
+    make -j${NumMakeThreads} -f cf_utility.mak
+    ./cf_support_test.exe
+    popd > /dev/null 2>&1
+
+}
+
+# #############################################################################
 function test-acl_lib-programs() {
     echo "******************************************************************"
     echo "* Test the acl_lib programs"
     echo "******************************************************************"
     echo " "
 
-    pushd "${CERT_ROOT}"/src > /dev/null 2>&1
+    pushd "${CERT_ROOT}"/src
     make -j${NumMakeThreads} -f certifier.mak
     popd > /dev/null 2>&1
 
-    pushd "${CERT_ROOT}"/acl_lib > /dev/null 2>&1
+    pushd "${CERT_ROOT}"/acl_lib
     cp ${CERT_ROOT}/certifier_service/certprotos/certifier.proto .
 
     # We need to clean here, otherwise make certifier_tests.mak will run
@@ -869,7 +886,7 @@ function test-acl_lib-programs() {
     make -i -f standalone_acl_lib_test.mak clean
 
     # Prepare test_data
-    mkdir acl_test_data
+    mkdir acl_test_data || true
     cp file_1 file_2 acl_test_data
 
     make -j${NumMakeThreads} -f standalone_acl_lib_test.mak
@@ -882,12 +899,13 @@ function test-acl_lib-programs() {
     make -j${NumMakeThreads} -f standalone_app.mak
 
     # Build utilities
-    pushd  ${CERT_ROOT}/utilities > /dev/null 2>&1
+    pushd  ${CERT_ROOT}/utilities
 
     make -j${NumMakeThreads} -f cert_utility.mak
     make -j${NumMakeThreads} -f policy_utilities.mak
 
-    popd > /dev/null 2>&1
+    popd
+    return 0
 
     # Prepare test_data
     cp file_1 file_2 test_data
@@ -895,8 +913,8 @@ function test-acl_lib-programs() {
 
     # This creates the policy key and policy cert.
     ${CERT_ROOT}/utilities/cert_utility.exe --operation=generate-policy-key  \
-                            --policy_key_output_file=policy_key_file.bin \
-                            --policy_cert_output_file=policy_cert_file.bin
+	--policy_authority_name="datica" --policy_key_output_file=policy_key_file.bin \
+        --policy_cert_output_file=policy_cert_file.bin
     cd ..
     # This makes the channel keys (auth keys and certs for the secure channel).
     sleep 1

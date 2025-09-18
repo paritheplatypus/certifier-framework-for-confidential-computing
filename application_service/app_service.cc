@@ -45,19 +45,30 @@
 using namespace certifier::framework;
 using namespace certifier::utilities;
 
+DEFINE_string(domain_name, "d", "domain name");
+
 DEFINE_string(parent_enclave, "simulated-enclave", "parent enclave");
 DEFINE_bool(help_me, false, "Want help?");
 DEFINE_bool(cold_init_service, false, "Start over");
+DEFINE_bool(restart_service, false, "restart");
 
 DEFINE_bool(print_all, false, "verbose");
 DEFINE_bool(print_log, false, "print log");
 DEFINE_string(log_file_name, "service.log", "service log file");
 
+DEFINE_string(public_key_alg, Enc_method_rsa_2048, "public key algorithm");
+DEFINE_string(symmetric_key_alg,
+              Enc_method_aes_256_cbc_hmac_sha256,
+              "authenticated symmetric key algorithm");
+
 DEFINE_string(policy_cert_file, "policy_cert_file.bin", "policy_cert");
 DEFINE_string(policy_host, "localhost", "address for policy server");
 DEFINE_int32(policy_port, 8123, "port for policy server");
+DEFINE_string(service_attestation_cert_file_name,
+              "service_attestation_cert.bin",
+              "service attestation");
 
-DEFINE_string(service_dir, "./service/", "directory for service data");
+DEFINE_string(service_dir, "./service_data/", "directory for service data");
 DEFINE_string(service_policy_store,
               "policy_store.bin",
               "policy store for service");
@@ -80,18 +91,9 @@ DEFINE_string(measurement_file, "app_service.measurement", "measurement");
 
 DEFINE_string(guest_login_name, "jlm", "guest name");
 
-DEFINE_string(ark_cert_file,
-              "./service/milan_ark_cert.der",
-              "ark cert file name");
-DEFINE_string(ask_cert_file,
-              "./service/milan_ask_cert.der",
-              "ask cert file name");
-DEFINE_string(vcek_cert_file,
-              "./service/milan_vcek_cert.der",
-              "vcek cert file name");
-
-
-// #define DEBUG
+DEFINE_string(ark_cert_file, "ark_cert.der", "ark cert file name");
+DEFINE_string(ask_cert_file, "ask_cert.der", "ask cert file name");
+DEFINE_string(vcek_cert_file, "vcek_cert.der", "vcek cert file name");
 
 // ---------------------------------------------------------------------------------
 
@@ -216,6 +218,7 @@ void delete_child(int signum) {
   if (c->thread_obj_ != nullptr) {
     delete c->thread_obj_;
   }
+
   // close parent fds/
   remove_kid(pid);
 }
@@ -230,8 +233,10 @@ cc_trust_manager *trust_mgr = nullptr;
 
 
 bool soft_Seal(spawned_children *kid, string in, string *out) {
-#if 1
+#ifdef DEBUG3
   printf("soft_Seal\n");
+#endif
+#ifdef DEBUG4
   const char *alg = trust_mgr->symmetric_key_algorithm_.c_str();
   printf("alg: %s\n", trust_mgr->symmetric_key_algorithm_.c_str());
   int ks = cipher_key_byte_size(alg);
@@ -270,8 +275,10 @@ bool soft_Seal(spawned_children *kid, string in, string *out) {
 }
 
 bool soft_Unseal(spawned_children *kid, string in, string *out) {
-#if 1
+#ifdef DEBUG3
   printf("soft_Unseal\n");
+#endif
+#ifdef DEBUG4
   const char *alg = trust_mgr->symmetric_key_algorithm_.c_str();
   printf("alg: %s\n", trust_mgr->symmetric_key_algorithm_.c_str());
   int ks = cipher_key_byte_size(alg);
@@ -295,7 +302,7 @@ bool soft_Unseal(spawned_children *kid, string in, string *out) {
            __LINE__);
     return false;
   }
-#ifdef DEBUG
+#ifdef DEBUG4
   printf("Unsealed  : ");
   print_bytes(t_size, t_out);
   printf("\n");
@@ -316,11 +323,10 @@ bool soft_Unseal(spawned_children *kid, string in, string *out) {
 }
 
 bool soft_Attest(spawned_children *kid, string in, string *out) {
-#ifdef DEBUG
+#ifdef DEBUG3
   printf("soft_Attest\n");
 #endif
 
-  // in  is a serialized vse-attestation
   if (!trust_mgr->cc_service_key_initialized_) {
     printf("%s() error, line %d, soft_Attest: service key not initialized\n",
            __func__,
@@ -345,7 +351,8 @@ bool soft_Attest(spawned_children *kid, string in, string *out) {
 
   report_info.set_not_before(nb);
   report_info.set_not_after(na);
-  // in should be a serialized attestation_user_data
+
+  // in is a serialized attestation_user_data
   report_info.set_user_data((byte *)in.data(), in.size());
   report_info.set_verified_measurement((byte *)kid->measurement_.data(),
                                        kid->measurement_.size());
@@ -368,6 +375,12 @@ bool soft_Attest(spawned_children *kid, string in, string *out) {
   } else {
     return false;
   }
+
+#ifdef DEBUG4
+  printf("Signing report with:\n");
+  print_key(trust_mgr->private_service_key_);
+  printf("\n");
+#endif
 
   if (!sign_report(type,
                    serialized_report_info,
@@ -421,13 +434,16 @@ bool soft_Getmeasurement(spawned_children *kid, string *out) {
 void app_service_loop(spawned_children *kid, int read_fd, int write_fd) {
   bool continue_loop = true;
 
-#ifdef DEBUG
+#ifdef DEBUG3
   printf("[%d] Application Service loop: read_fd=%d write_fd=%d\n",
          __LINE__,
          read_fd,
          write_fd);
 #endif
   while (continue_loop) {
+#ifdef DEBUG3
+    printf("%s [%d] Application Service loop top\n", __func__, __LINE__);
+#endif
     bool   succeeded = false;
     string in;
     string out;
@@ -461,7 +477,7 @@ void app_service_loop(spawned_children *kid, int read_fd, int write_fd) {
     }
 
 finishreq:
-#ifdef DEBUG
+#ifdef DEBUG3
     if (succeeded)
       printf("Service response: succeeded\n");
     else
@@ -487,16 +503,18 @@ finishreq:
       printf("Response write failed\n");
     }
 
-#ifdef DEBUG
-    printf("Service loop: ended\n");
+#ifdef DEBUG3
+    printf("%s [%d] Application Service loop bottom\n", __func__, __LINE__);
 #endif
   }
 }
 
 bool start_app_service_loop(spawned_children *kid, int read_fd, int write_fd) {
-#ifdef DEBUG
+
+#ifdef DEBUG3
   printf("\n[%d] %s\n", __LINE__, __func__);
 #endif
+
 #ifndef NOTHREAD
   std::thread *t = new std::thread(app_service_loop, kid, read_fd, write_fd);
   kid->thread_obj_ = t;
@@ -840,22 +858,19 @@ bool get_sev_enclave_parameters(string **s, int *n) {
   }
   *s = args;
 
-  if (!read_file_into_string(FLAGS_service_dir + FLAGS_ark_cert_file,
-                             &args[0])) {
+  if (!read_file_into_string(FLAGS_ark_cert_file, &args[0])) {
     printf("%s() error, line %d, Can't read attest file\n", __func__, __LINE__);
     return false;
   }
 
-  if (!read_file_into_string(FLAGS_service_dir + FLAGS_ask_cert_file,
-                             &args[1])) {
+  if (!read_file_into_string(FLAGS_ask_cert_file, &args[1])) {
     printf("%s() error, line %d, Can't read measurement file\n",
            __func__,
            __LINE__);
     return false;
   }
 
-  if (!read_file_into_string(FLAGS_service_dir + FLAGS_vcek_cert_file,
-                             &args[2])) {
+  if (!read_file_into_string(FLAGS_vcek_cert_file, &args[2])) {
     printf("%s() error, line %d, Can't read endorsement file\n",
            __func__,
            __LINE__);
@@ -868,6 +883,7 @@ bool get_sev_enclave_parameters(string **s, int *n) {
 
 // -----------------------------------------------------------------------------------------
 
+#ifdef OLD_API
 int main(int an, char **av) {
   string usage("Application Service utility");
   gflags::SetUsageMessage(usage);
@@ -996,3 +1012,204 @@ app_service.exe --print_all=true|false --policy_host=policy-host-address \n\
   helper.clear_sensitive_data();
   return 0;
 }
+#endif
+
+// -----------------------------------------------------------------------------------------
+
+#ifdef NEW_API
+int main(int an, char **av) {
+  string usage("Application Service utility");
+  gflags::SetUsageMessage(usage);
+  gflags::ParseCommandLineFlags(&an, &av, true);
+  an = 1;
+  ::testing::InitGoogleTest(&an, av);
+
+  if (FLAGS_help_me) {
+    printf("\
+app_service.exe --print_all=true|false --policy_host=policy-host-address \n\
+                --policy_port=policy-host-port \n\
+                --service_dir=-directory-for-service-data \n\
+                --server_service_host=my-server-host-address \n\
+                --server_service_port=server-host-port \n\
+                --policy_cert_file=self-signed-policy-cert-file-name \n\
+                --policy_store_file=policy-store-file-name \n\
+                --host_enclave_type=\"simulated-enclave\"\n");
+    return 0;
+  }
+
+  SSL_library_init();
+  string enclave_type(FLAGS_parent_enclave);
+  string purpose("attestation");
+
+  string store_file(FLAGS_service_dir);
+  store_file.append(FLAGS_service_policy_store);
+
+  cc_trust_manager helper(enclave_type, purpose, store_file);
+  trust_mgr = &helper;
+
+#  ifdef DEBUG3
+  printf("Enclave type: %s\n", FLAGS_host_enclave_type.c_str());
+#  endif
+
+  int     n = 0;
+  string *params = nullptr;
+  if (FLAGS_host_enclave_type == "simulated-enclave") {
+
+    // get parameters
+    if (!get_simulated_enclave_parameters(&params, &n) || params == nullptr) {
+      printf("%s() error, line %d, Can't get simulated enclave parameters\n",
+             __func__,
+             __LINE__);
+      return 1;
+    }
+  } else if (FLAGS_host_enclave_type == "oe-enclave") {
+    printf("%s() error, line %d, Unsupported host enclave\n",
+           __func__,
+           __LINE__);
+    return 1;
+  } else if (FLAGS_host_enclave_type == "sev-enclave") {
+
+    // get parameters
+    if (!get_sev_enclave_parameters(&params, &n) || params == nullptr) {
+      printf("%s() error, line %d, Can't get simulated enclave parameters\n",
+             __func__,
+             __LINE__);
+      return 1;
+    }
+  } else {
+    printf("%s() error, line %d, Unsupported host enclave\n",
+           __func__,
+           __LINE__);
+    return 1;
+  }
+
+  // Init enclave
+  if (!helper.initialize_enclave(n, params)) {
+    printf("%s() error, line %d, Can't init simulated enclave\n",
+           __func__,
+           __LINE__);
+    return 1;
+  }
+
+  if (params != nullptr) {
+    delete[] params;
+    params = nullptr;
+  }
+
+#  ifdef DEBUG3
+  printf("Enclave initialized\n");
+#  endif
+
+  // Initialize store
+  if (!helper.initialize_store()) {
+    printf("%s() error, line %d, Can't init store\n", __func__, __LINE__);
+    return 1;
+  }
+
+#  ifdef DEBUG3
+  printf("\n\nStore initialized\n");
+  printf("\ntrust data at initialization\n");
+  helper.print_trust_data();
+  printf("\nStore\n");
+  helper.store_.print();
+#  endif
+
+  if (!helper.initialize_keys(FLAGS_public_key_alg,
+                              FLAGS_symmetric_key_alg,
+                              false)) {
+    printf("%s() error, line %d, Can't init keys\n", __func__, __LINE__);
+    return 1;
+  }
+
+  int    ret = 0;
+  string serialized_policy_cert;
+  serialized_policy_cert.assign((char *)initialized_cert,
+                                initialized_cert_size);
+
+  if (FLAGS_cold_init_service) {
+#  ifdef DEBUG3
+    printf("\nfresh-start\n");
+#  endif
+
+    // initialize and certify service data
+    if (!helper.initialize_new_domain(FLAGS_domain_name,
+                                      purpose,
+                                      serialized_policy_cert,
+                                      FLAGS_policy_host,
+                                      FLAGS_policy_port)) {
+      printf("%s() error, line %d, cold-init failed\n", __func__, __LINE__);
+      ret = 1;
+      goto done;
+    }
+#  ifdef DEBUG3
+    printf("Not certified yet\n");
+#  endif
+
+    certifiers *c = helper.find_certifier_by_domain_name(FLAGS_domain_name);
+    if (c == nullptr) {
+      printf("%s() error, line %d, can't find this domain\n",
+             __func__,
+             __LINE__);
+      ret = 1;
+      goto done;
+    }
+
+    if (!c->is_certified_) {
+      if (!c->certify_domain(helper.purpose_)) {
+        printf("%s() error, line %d, certification failed\n",
+               __func__,
+               __LINE__);
+        ret = 1;
+        goto done;
+      }
+    } else {
+      printf("%s() error, line %d, not certified\n", __func__, __LINE__);
+      ret = 1;
+      goto done;
+    }
+    string file_name(FLAGS_service_dir);
+    file_name += FLAGS_service_attestation_cert_file_name;
+    if (!write_file_from_string(file_name, c->admissions_cert_)) {
+      printf("%s() error, line %d, can't write service cert\n",
+             __func__,
+             __LINE__);
+      ret = 1;
+      goto done;
+    }
+#  ifdef DEBUG3
+    printf("\ncertified %s\n", file_name.c_str());
+
+#  endif
+  } else {
+    if (!helper.initialize_existing_domain(FLAGS_domain_name)) {
+      printf("%s() error, line %d, initialize_existing_domain failed\n",
+             __func__,
+             __LINE__);
+      ret = 1;
+      goto done;
+    }
+#  ifdef DEBUG3
+    printf("\ncertified\n");
+#  endif
+  }
+
+#  ifdef DEBUG3
+  helper.print_trust_data();
+#  endif  // DEBUG
+
+  // run service response
+  if (!app_request_server()) {
+    printf("%s() error, line %d, Can't run request server\n",
+           __func__,
+           __LINE__);
+    ret = 1;
+    goto done;
+  }
+
+done:
+  helper.clear_sensitive_data();
+  return ret;
+}
+#endif
+
+// ----------------------------------------------------------------------------

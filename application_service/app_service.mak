@@ -30,6 +30,7 @@ endif
 # little more complicated.  To use newer protobuf libraries, define NEWPROROBUF as
 # is done below.  Comment it out for older protobuf usage.
 NEWPROTOBUF=1
+# CF_NEW_API=1
 
 CP = $(CERTIFIER_ROOT)/certifier_service/certprotos
 LIBSRC= $(SRC_DIR)/src
@@ -38,11 +39,16 @@ US= $(S)
 O= $(OBJ_DIR)
 I= $(SRC_DIR)/include
 INCLUDE= -I$(I) -I$(LIBSRC)/sev-snp -I/usr/local/opt/openssl@1.1/include/ -I/usr/include
+SE= $(LIBSRC)/simulated-enclave
+AE=$(LIBSRC)/application-enclave
 
 ifndef NEWPROTOBUF
-CFLAGS=$(INCLUDE) -O3 -g -Wall -std=c++11 -Wno-unused-variable -D X64 -D DEBUG -Wno-deprecated-declarations
+CFLAGS=$(INCLUDE) -O3 -g -Wall -std=c++11 -Wno-unused-variable -D X64 -Wno-deprecated-declarations
 else
-CFLAGS=$(INCLUDE) -O3 -g -Wall -std=c++17 -Wno-unused-variable -D X64 -D DEBUG -Wno-deprecated-declarations
+CFLAGS=$(INCLUDE) -O3 -g -Wall -std=c++17 -Wno-unused-variable -D X64 -Wno-deprecated-declarations
+endif
+ifdef CF_NEW_API
+CFLAGS+=-DNEW_API
 endif
 
 CC=g++
@@ -84,6 +90,8 @@ clean:
 	rm -rf $(O)/*.o
 	@echo "removing executable file"
 	rm -rf $(EXE_DIR)/app_service.exe
+	rm -rf $(EXE_DIR)/send_request.exe
+	rm -rf $(EXE_DIR)/test_user.exe
 
 hello_world.exe: $(S)/hello_world.cc
 	@echo "compiling $<"
@@ -138,11 +146,11 @@ $(O)/cc_useful.o: $(LIBSRC)/cc_useful.cc $(I)/cc_useful.h
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
 
-$(O)/simulated_enclave.o: $(LIBSRC)/simulated_enclave.cc $(I)/simulated_enclave.h
+$(O)/simulated_enclave.o: $(SE)/simulated_enclave.cc $(I)/simulated_enclave.h
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
 
-$(O)/application_enclave.o: $(LIBSRC)/application_enclave.cc $(I)/application_enclave.h
+$(O)/application_enclave.o: $(AE)/application_enclave.cc $(I)/application_enclave.h
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
 

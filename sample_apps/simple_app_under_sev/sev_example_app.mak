@@ -1,4 +1,4 @@
-#    
+#
 #    File: sev_example_app.mak
 
 # CERTIFIER_ROOT will be certifier-framework-for-confidential-computing/ dir
@@ -30,6 +30,7 @@ endif
 # little more complicated.  To use newer protobuf libraries, define NEWPROROBUF as
 # is done below.  Comment it out for older protobuf usage.
 NEWPROTOBUF=1
+#CF_NEW_API=1
 
 CP = $(CERTIFIER_ROOT)/certifier_service/certprotos
 S= $(SRC_DIR)/src
@@ -38,6 +39,8 @@ US=.
 I= $(SRC_DIR)/include
 INCLUDE=-I. -I $(I) -I/usr/local/opt/openssl@1.1/include/ -I $(S)/sev-snp -I/usr/include
 COMMON_SRC = $(CERTIFIER_ROOT)/sample_apps/common
+SE = $(S)/simulated-enclave
+AE= $(S)/application-enclave
 
 # Inherit -D<flags> provided externally
 CFLAGS := $(CFLAGS)
@@ -47,6 +50,10 @@ else
 CFLAGS += $(INCLUDE) -O3 -g -Wall -std=c++17 -Wno-unused-variable -D X64 -D SEV_SNP -Wno-deprecated-declarations
 endif
 CFLAGS += -DSEV_SIMPLE_APP
+
+ifdef CF_NEW_API
+CFLAGS += -DNEW_API
+endif
 
 CC=g++
 LINK=g++
@@ -107,11 +114,11 @@ $(O)/support.o: $(S)/support.cc $(I)/support.h
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
 
-$(O)/simulated_enclave.o: $(S)/simulated_enclave.cc $(I)/simulated_enclave.h
+$(O)/simulated_enclave.o: $(SE)/simulated_enclave.cc $(I)/simulated_enclave.h
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
 
-$(O)/application_enclave.o: $(S)/application_enclave.cc $(I)/application_enclave.h
+$(O)/application_enclave.o: $(AE)/application_enclave.cc $(I)/application_enclave.h
 	@echo "\ncompiling $<"
 	$(CC) $(CFLAGS) -o $(@D)/$@ -c $<
 
